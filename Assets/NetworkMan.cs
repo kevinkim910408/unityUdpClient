@@ -18,6 +18,7 @@ public class NetworkMan : MonoBehaviour
         //create new udp and bind the ip and port
         udp = new UdpClient(); // 소켓초기화
 
+        //udp.Connect("3.20.240.191", 12345); // 서버에 접속
         udp.Connect("localhost", 12345); // 로컬에 접속
 
         //send msg to server - need to send bytes -- Encoding.ASCII.GetBytes -> converting
@@ -40,6 +41,7 @@ public class NetworkMan : MonoBehaviour
         NEW_CLIENT,
         UPDATE,
         INFO_FROM_SERVER,
+        GET_ID_FROM_SERVER,
     };
 
     [Serializable]
@@ -73,7 +75,7 @@ public class NetworkMan : MonoBehaviour
     [Serializable] // Json string 을 각각의 클래스로 형변환 할때 필요함.반대로, Json으로 묶어서 서버에 줄때도 이게 있어야 Json 클래스로 만들 수 있음.
     public class AllClientsInfo
     {
-        public IDColor[] player; // 서버랑 클라가 데이터를 주고받을때 변수이름, 서버에서 보내는 이름이 같아야함.
+        public IDColor[] players; // 서버랑 클라가 데이터를 주고받을때 변수이름, 서버에서 보내는 이름이 같아야함.
                                  // IDColor[] -  ID, Color가 들어있음.
     }
 
@@ -94,9 +96,14 @@ public class NetworkMan : MonoBehaviour
     public Message latestMessage;
     public GameState lastestGameState;
     public AllClientsInfo lastestInfo;
+    public AllClientsInfo allClientsInfo;
+    //dictionary key값이랑 변수 이름이랑 같아야함.
+    public IDColor idFromServer;
+
 
     public Player player;
     public GameObject capsule;
+    public GameObject me;
     Dictionary<string, GameObject> listOfPlayer = new Dictionary<string, GameObject>(); // string - ip, port gameObject - capsule
 
     bool needSpawn = false;
@@ -124,20 +131,26 @@ public class NetworkMan : MonoBehaviour
             { // latestMessage의 cmd가 무엇인지 
                 case commands.NEW_CLIENT: // 기존의 클라들이 새로운 클라들의 정보를 받음
                     needSpawn2 = true;
-
                     player = JsonUtility.FromJson<Player>(returnData);
                     break;
+
                 case commands.UPDATE:
+                    allClientsInfo = JsonUtility.FromJson<AllClientsInfo>(returnData); // 기존의 클라들의 색, id가 들어있다.
                     break;
+
                 case commands.INFO_FROM_SERVER: // 새로 접속한 애가 기존의 정보를 다 받음.
                     needSpawn = true; // 내가 기존의 클라들을 받아서 소환(나한테 보이는 클라를 생성)
-
                     lastestInfo = JsonUtility.FromJson<AllClientsInfo>(returnData); // returnData가 AllClientsInfo에 맞는 FromJson으로 변형됌,
-                    for (int i = 0; i < lastestInfo.player.Length; ++i)
+                    for (int i = 0; i < lastestInfo.players.Length; ++i)
                     {
-                        Debug.Log(lastestInfo.player[i].id);
+                        Debug.Log(lastestInfo.players[i].id);
                     }
                     break;
+
+                case commands.GET_ID_FROM_SERVER: // get ip, port from the server
+                    idFromServer = JsonUtility.FromJson<IDColor>(returnData);
+                    break;
+
                 default:
                     Debug.Log("Error");
                     break;
@@ -158,13 +171,13 @@ public class NetworkMan : MonoBehaviour
         if(needSpawn == true)
         {
             needSpawn = false;
-            for(int i = 0; i < lastestInfo.player.Length; ++i)
+            for(int i = 0; i < lastestInfo.players.Length; ++i)
             {
                 // Spawning
                 GameObject gm = Instantiate(capsule, Vector3.zero, Quaternion.identity);
 
                 //  Dictionary<string, GameObject> listOfPlayer에 player의 id = ip, port와 만들거 넣어줌
-                listOfPlayer.Add(lastestInfo.player[i].id, gm);
+                listOfPlayer.Add(lastestInfo.players[i].id, gm);
             }
         }
     }
@@ -185,7 +198,19 @@ public class NetworkMan : MonoBehaviour
 
     void UpdatePlayers()
     {
-
+        for(int i = 0; i < allClientsInfo.players.Length; ++i)
+        {
+            if (listOfPlayer.ContainsKey(allClientsInfo.players[i].id))
+            {
+                listOfPlayer[allClientsInfo.players[i].id].transform.GetComponent<Renderer>().material.color 
+                    = new Color(allClientsInfo.players[i].color.R, allClientsInfo.players[i].color.G, allClientsInfo.players[i].color.B);
+            }
+            if(allClientsInfo.players[i].id == idFromServer.id)
+            {
+                me.GetComponent<Renderer>().material.color
+                    = new Color(allClientsInfo.players[i].color.R, allClientsInfo.players[i].color.G, allClientsInfo.players[i].color.B);
+            }
+        }
     }
 
     void DestroyPlayers()
