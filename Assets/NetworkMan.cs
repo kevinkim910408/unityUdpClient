@@ -28,6 +28,7 @@ public class NetworkMan : MonoBehaviour
         udp.BeginReceive(new AsyncCallback(OnReceived), udp);
 
         InvokeRepeating("HeartBeat", 1, 1); //every one second, running heartbeat
+        InvokeRepeating("SendPosition", 0.3f, 0.3f); // 0.3초마다 send position 함수 호출
     }
 
     void OnDestroy()
@@ -75,12 +76,12 @@ public class NetworkMan : MonoBehaviour
     [Serializable] // Json string 을 각각의 클래스로 형변환 할때 필요함.반대로, Json으로 묶어서 서버에 줄때도 이게 있어야 Json 클래스로 만들 수 있음.
     public class AllClientsInfo
     {
-        public IDColor[] players; // 서버랑 클라가 데이터를 주고받을때 변수이름, 서버에서 보내는 이름이 같아야함.
+        public IDColorPos[] players; // 서버랑 클라가 데이터를 주고받을때 변수이름, 서버에서 보내는 이름이 같아야함.
                                  // IDColor[] -  ID, Color가 들어있음.
     }
 
     [Serializable]
-    public class IDColor // 서버로부터 ID, Color를 받아옴
+    public class IDColorPos // 서버로부터 ID, Color를 받아옴
     {
         public string id;
         [Serializable]
@@ -91,6 +92,15 @@ public class NetworkMan : MonoBehaviour
             public float B;
         }
         public RGB color;
+
+        [Serializable]
+        public struct pos
+        {
+            public float x;
+            public float y;
+            public float z;
+        }
+        public pos position;
     }
 
     public Message latestMessage;
@@ -98,7 +108,7 @@ public class NetworkMan : MonoBehaviour
     public AllClientsInfo lastestInfo;
     public AllClientsInfo allClientsInfo;
     //dictionary key값이랑 변수 이름이랑 같아야함.
-    public IDColor idFromServer;
+    public IDColorPos idFromServer;
 
 
     public Player player;
@@ -121,7 +131,7 @@ public class NetworkMan : MonoBehaviour
 
         //서버의 정보를 converting to string
         string returnData = Encoding.ASCII.GetString(message);
-        Debug.Log("Got this: " + returnData);
+        //Debug.Log("Got this: " + returnData);
 
         latestMessage = JsonUtility.FromJson<Message>(returnData);  // FromJson: 서버에서 보낸 Json data를 우리가 알수있게 바꿈. <Message> 클래스로형변환
         try
@@ -136,6 +146,13 @@ public class NetworkMan : MonoBehaviour
 
                 case commands.UPDATE:
                     allClientsInfo = JsonUtility.FromJson<AllClientsInfo>(returnData); // 기존의 클라들의 색, id가 들어있다.
+
+                    for (int i = 0; i < allClientsInfo.players.Length; ++i)
+                    {
+                        if (allClientsInfo.players[i].id == idFromServer.id)
+                            Debug.Log(allClientsInfo.players[i].position.x + " " + allClientsInfo.players[i].position.y +
+                                " " + allClientsInfo.players[i].position.z);
+                    }
                     break;
 
                 case commands.INFO_FROM_SERVER: // 새로 접속한 애가 기존의 정보를 다 받음.
@@ -143,22 +160,22 @@ public class NetworkMan : MonoBehaviour
                     lastestInfo = JsonUtility.FromJson<AllClientsInfo>(returnData); // returnData가 AllClientsInfo에 맞는 FromJson으로 변형됌,
                     for (int i = 0; i < lastestInfo.players.Length; ++i)
                     {
-                        Debug.Log(lastestInfo.players[i].id);
+                        //Debug.Log(lastestInfo.players[i].id);
                     }
                     break;
 
                 case commands.GET_ID_FROM_SERVER: // get ip, port from the server
-                    idFromServer = JsonUtility.FromJson<IDColor>(returnData);
+                    idFromServer = JsonUtility.FromJson<IDColorPos>(returnData);
                     break;
 
                 default:
-                    Debug.Log("Error");
+                    //Debug.Log("Error");
                     break;
             }
         }
         catch (Exception e)
         {
-            Debug.Log(e.ToString());
+            //Debug.Log(e.ToString());
         }
 
         // schedule the next receive operation once reading is done: -->  // EndReceive 로 자료를 수신하고 다시 BeginReceive 호출하여 자료 수신 대기 
@@ -204,6 +221,9 @@ public class NetworkMan : MonoBehaviour
             {
                 listOfPlayer[allClientsInfo.players[i].id].transform.GetComponent<Renderer>().material.color 
                     = new Color(allClientsInfo.players[i].color.R, allClientsInfo.players[i].color.G, allClientsInfo.players[i].color.B);
+
+                listOfPlayer[allClientsInfo.players[i].id].transform.position
+                    = new Vector3(allClientsInfo.players[i].position.x, allClientsInfo.players[i].position.y, allClientsInfo.players[i].position.z);
             }
             if(allClientsInfo.players[i].id == idFromServer.id)
             {
@@ -221,6 +241,15 @@ public class NetworkMan : MonoBehaviour
     void HeartBeat()
     {
         Byte[] sendBytes = Encoding.ASCII.GetBytes("heartbeat");
+        udp.Send(sendBytes, sendBytes.Length);
+    }
+
+    void SendPosition()
+    {
+        string pos = "position " + me.transform.position.x.ToString() + " " + me.transform.position.y.ToString() + " "
+             + me.transform.position.z.ToString() + " ";
+
+        Byte[] sendBytes = Encoding.ASCII.GetBytes(pos);
         udp.Send(sendBytes, sendBytes.Length);
     }
 
