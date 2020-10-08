@@ -18,8 +18,8 @@ public class NetworkMan : MonoBehaviour
         //create new udp and bind the ip and port
         udp = new UdpClient(); // 소켓초기화
 
-        //udp.Connect("3.20.240.191", 12345); // 서버에 접속
-        udp.Connect("localhost", 12345); // 로컬에 접속
+        udp.Connect("3.20.240.191", 12345); // AWS - SERVER
+        //udp.Connect("localhost", 12345); //  LOCAL
 
         //send msg to server - need to send bytes -- Encoding.ASCII.GetBytes -> converting
         Byte[] sendBytes = Encoding.ASCII.GetBytes("connect");
